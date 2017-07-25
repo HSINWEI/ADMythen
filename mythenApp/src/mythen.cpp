@@ -838,7 +838,7 @@ void mythen::pollTask()
 
 void mythen::acquisitionTask()
 {
-    size_t nread, nread_expect;
+    size_t nread, nread_expect, nread_sum;
     size_t nwrite;
     int eventStatus;
     int imageMode;
@@ -886,17 +886,20 @@ void mythen::acquisitionTask()
               // Work on the cases of what are you getting from getstatus
               do {
                 nread=0;
+                nread_sum=0;
                 if (readmode_==0)
                   strcpy(outString_, "-readoutraw");
                 else
                   strcpy(outString_, "-readout");
 
-                status = pasynOctetSyncIO->writeRead(pasynUserMeter_, outString_, strlen(outString_), (char *)detArray_,
-                                        nread_expect, M1K_TIMEOUT+acquireTime, &nwrite, &nread, &eomReason);  //Timeout is M1K_TIMEOUT + AcquireTime
+                status = pasynOctetSyncIO->write(pasynUserMeter_, outString_, strlen(outString_), M1K_TIMEOUT+acquireTime, &nwrite);  //Timeout is M1K_TIMEOUT + AcquireTime
+                do {
+					status = pasynOctetSyncIO->read(pasynUserMeter_, (char *)detArray_+nread_sum, nread_expect, M1K_TIMEOUT+acquireTime, &nread, &eomReason);  //Timeout is M1K_TIMEOUT + AcquireTime
+					nread_sum += nread;
+					//printf("%s nread=%8d, nread_sum=%8d, nread_expect=%8d\n", __func__, nread, nread_sum, nread_expect);
+                } while ( (nread_sum < nread_expect) && (nread > 0));
 
-                //printf("nread_expected = %d\tnread = %d\n", nread_expect,nread);
-
-                if(nread == nread_expect) {
+                if(nread_sum == nread_expect) {
                     this->lock();
                     dataOK = dataCallback(detArray_);
                     this->unlock();
@@ -961,7 +964,7 @@ epicsInt32 mythen::dataCallback(epicsInt32 *pData)
 
     if (pData == NULL || pData[0] < 0) return(0); 
 
-    dims[0] = MAX_DIMS;
+    dims[0] = this->nmodules*MAX_DIMS;
     dims[1] = 1;
     totalBytes = this->nmodules*MAX_DIMS*sizeof(epicsInt32);
 
@@ -1376,6 +1379,11 @@ mythen::mythen(const char *portName, const char *IPPortName,
     status |= setIntegerParam(SDNModules, aux);
     detArray_ = (epicsInt32*) calloc(this->nmodules*1280, sizeof(epicsInt32));
     tmpArray_ = (epicsUInt32*) calloc(this->nmodules*1280, sizeof(epicsInt32));
+
+	//overwrite previous size settings
+    sizeX = sensorSizeX = this->nmodules*MAX_DIMS;
+    status |= setIntegerParam(ADSizeX, sizeX);
+    status |= setIntegerParam(ADMaxSizeX, sensorSizeX);
 
     callParamCallbacks();
 
