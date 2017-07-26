@@ -897,6 +897,11 @@ void mythen::acquisitionTask()
 					status = pasynOctetSyncIO->read(pasynUserMeter_, (char *)detArray_+nread_sum, nread_expect, M1K_TIMEOUT+acquireTime, &nread, &eomReason);  //Timeout is M1K_TIMEOUT + AcquireTime
 					nread_sum += nread;
 					//printf("%s nread=%8d, nread_sum=%8d, nread_expect=%8d\n", __func__, nread, nread_sum, nread_expect);
+	                if(status != asynSuccess) {
+	                    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+	                          "%s:%s: error using readout command status=%d, nRead=%d, eomReason=%d\n",
+	                          driverName, functionName, status, (int)nread, eomReason);
+	                }
                 } while ( (nread_sum < nread_expect) && (nread > 0));
 
                 if(nread_sum == nread_expect) {
@@ -904,20 +909,19 @@ void mythen::acquisitionTask()
                     dataOK = dataCallback(detArray_);
                     this->unlock();
                     if (!dataOK) {
-                        eventStatus = getStatus();
-                        setIntegerParam(ADStatus, eventStatus);
+                    	asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+                    		"%s:%s: error processed readout data\n",
+                    		driverName, functionName);
                     }
-
+                    eventStatus = getStatus();
+                    setIntegerParam(ADStatus, eventStatus);
                 }
                 else {
                     eventStatus = getStatus();
                     setIntegerParam(ADStatus, eventStatus);
-                  //printf("Data not size expected ADStatus: %d\n",eventStatus);
-                }
-                if(status != asynSuccess) {
-                    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
-                          "%s:%s: error using readout command status=%d, nRead=%d, eomReason=%d\n",
-                          driverName, functionName, status, (int)nread, eomReason);
+                	asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+                    		"%s:%s: Data not size expected ADStatus: %d\n",
+                    		driverName, functionName, eventStatus);
                 }
               } 
               while (status == asynSuccess && (eventStatus==ADStatusAcquire||eventStatus==ADStatusReadout) && acquiring_);
