@@ -952,7 +952,7 @@ void mythen::acquisitionTask()
 epicsInt32 mythen::dataCallback(epicsInt32 *pData)
 {
     NDArray *pImage; 
-    int ndims = 1;
+    int ndims = 2;
     size_t dims[2];
     int totalBytes; 
     int arrayCallbacks;
