@@ -131,6 +131,7 @@ public:
     virtual asynStatus setEnergy(epicsFloat64 value);
     virtual asynStatus setTau(epicsFloat64 value);
     virtual asynStatus setFrames(epicsInt32 value);
+    virtual asynStatus setNModules(epicsInt32 value);
     virtual asynStatus setFlip(epicsInt32 value);
     virtual asynStatus setTrigger(epicsInt32 value);
     virtual asynStatus loadSettings(epicsInt32 value);
@@ -493,6 +494,36 @@ asynStatus mythen::setNumGates(epicsInt32 value)
     return status;
 }
 
+/** Number of modules. **/
+asynStatus mythen::setNModules(epicsInt32 value)
+{
+    asynStatus status;
+    const char *functionName="setNModules";
+    int aux;
+    size_t nread;
+    size_t nwrite;
+    int eomReason;
+
+    epicsSnprintf(outString_, sizeof(outString_), "-nmodules %d", value);
+
+    status = pasynOctetSyncIO->writeRead(pasynUserMeter_, outString_, strlen(outString_),
+                inString_, sizeof(int), M1K_TIMEOUT*value, &nwrite, &nread, &eomReason);
+
+    if(status != asynSuccess)
+          asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+              "%s:%s: error!\n",driverName, functionName);
+    else{
+        aux = stringToInt32(this->inString_);
+        //check for errors
+        if (aux < 0){
+            asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+                "%s:%s: error, expected 0, received %d\n",
+                driverName, functionName, aux);
+        }
+    }
+    return status;
+}
+
 /** Get Firmware Version **/
 asynStatus mythen::getFirmware()
 {
@@ -732,6 +763,24 @@ asynStatus mythen::getSettings()
     writeReadMeter();
     aux = stringToInt32(this->inString_);
     if (aux >= 0) setIntegerParam(SDNumFrames, aux);
+
+    strcpy(outString_, "-get nmodules");
+    writeReadMeter();
+    aux = stringToInt32(this->inString_);
+    if (aux > 0) {
+        if (this->nmodules < aux) {
+            if(detArray_) {
+                free(detArray_);
+                detArray_ = (epicsInt32*) calloc(aux*1280, sizeof(epicsInt32));
+            }
+            if (tmpArray_) {
+                free(tmpArray_);
+                tmpArray_ = (epicsUInt32*) calloc(aux*1280, sizeof(epicsInt32));
+            }
+        }
+        setIntegerParam(SDNModules, aux);
+        this->nmodules=aux;
+    }
 
     strcpy(outString_, "-get tau");
     writeReadMeter();
@@ -1153,6 +1202,8 @@ asynStatus mythen::writeInt32(asynUser *pasynUser, epicsInt32 value)
         status |= setTrigger(value);
       } else if (function == SDReset) {
         status |= setReset();
+      } else if (function == SDNModules) {
+          status |= setNModules(value);
       } else if (function == ADImageMode) {
 
         //getIntegerParam(SDNumFrames, &frames_);

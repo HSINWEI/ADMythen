@@ -21,7 +21,7 @@ record (mbbo, "$(P)$(R)Setting")
     field (THST, "Cr")
     field (THVL, "3")
     field (VAL,  "0")
-    field (PINI, "YES")
+    field (PINI, "NO")
 }
 record (mbbi, "$(P)$(R)Setting_RBV")
 {
@@ -73,7 +73,7 @@ record (ao, "$(P)$(R)ThresholdEnergy")
     field (EGU,  "keV")
     field (PREC, "2")
     field (VAL,  "8.05")
-    field (PINI, "YES")
+    field (PINI, "NO")
 }
 
 record (ai, "$(P)$(R)ThresholdEnergy_RBV")
@@ -96,7 +96,7 @@ record (ao, "$(P)$(R)BeamEnergy")
     field (EGU,  "keV")
     field (VAL,  "8.1")
     field (PREC, "2")
-    field (PINI, "YES")
+    field (PINI, "NO")
 }
 
 record (ai, "$(P)$(R)BeamEnergy_RBV")
@@ -332,6 +332,16 @@ record (mbbi, "$(P)$(R)TriggerMode_RBV")
 #----------------------------------
 # Readback Number of Detector Modules
 #----------------------------------
+record (longout, "$(P)$(R)NumModules")
+{
+    field (DESC, "Number of modules")
+    field (DTYP, "asynInt32")
+    field (OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT)) SD_NMODULES")
+    field (VAL,  "$(NMOD)")
+    field (DRVH, "$(NMOD)")
+    field (PINI, "YES")
+}
+
 record (longin, "$(P)$(R)NumModules_RBV")
 {
     field (DESC, "Number of modules")
