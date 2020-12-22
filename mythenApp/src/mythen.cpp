@@ -1365,6 +1365,7 @@ mythen::mythen(const char *portName, const char *IPPortName,
     
     
     // Read the current settings from the device.  This will set parameters in the parameter library.
+    acquiring_ = 0; /* MUST initialize acquiring_ before calling getSettings() */
     getSettings();
 
     int aux;
