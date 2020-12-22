@@ -838,7 +838,7 @@ void mythen::pollTask()
 
 void mythen::acquisitionTask()
 {
-    size_t nread, nread_expect;
+    size_t nread, nread_expect, nread_sum;
     size_t nwrite;
     int eventStatus=0;
     int imageMode;
@@ -886,26 +886,35 @@ void mythen::acquisitionTask()
               // Work on the cases of what are you getting from getstatus
               do {
                 nread=0;
+                nread_sum=0;
                 if (readmode_==0)
                   strcpy(outString_, "-readoutraw");
                 else
                   strcpy(outString_, "-readout");
 
-                status = pasynOctetSyncIO->writeRead(pasynUserMeter_, outString_, strlen(outString_), (char *)detArray_,
-                                        nread_expect, M1K_TIMEOUT+acquireTime, &nwrite, &nread, &eomReason);  //Timeout is M1K_TIMEOUT + AcquireTime
+                status = pasynOctetSyncIO->write(pasynUserMeter_, outString_, strlen(outString_), M1K_TIMEOUT, &nwrite);  //Timeout is M1K_TIMEOUT + AcquireTime
+                do {
+                  status = pasynOctetSyncIO->read(pasynUserMeter_, (char *)detArray_+nread_sum, nread_expect-nread_sum, M1K_TIMEOUT+acquireTime, &nread, &eomReason);  //Timeout is M1K_TIMEOUT + AcquireTime
+                  nread_sum += nread;
+                  //printf("%s nread=%8d, nread_sum=%8d, nread_expect=%8d\n", __func__, nread, nread_sum, nread_expect);
+	                if(status != asynSuccess) {
+	                    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+	                          "%s:%s:%d: error using readout command status=%d, nRead=%d, eomReason=%d\n",
+	                          driverName, functionName, __LINE__, status, (int)nread, eomReason);
+	                }
+                } while ( (nread_sum < nread_expect) && (nread > 0));
 
-                //printf("nread_expected=%d, nread=%d, status=%d, timeout=%f, eomReason=%d\n",
-                //        (int)nread_expect, (int)nread, status, M1K_TIMEOUT+acquireTime, eomReason);
-
-                if(nread == nread_expect) {
+                if(nread_sum == nread_expect) {
                     this->lock();
                     dataOK = dataCallback(detArray_);
                     this->unlock();
                     if (!dataOK) {
-                        eventStatus = getStatus();
-                        setIntegerParam(ADStatus, eventStatus);
+                        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+                            "%s:%s: error processing readout data\n",
+                            driverName, functionName);
                     }
-
+                    eventStatus = getStatus();
+                    setIntegerParam(ADStatus, eventStatus);
                 }
                 else {
                     eventStatus = getStatus();
@@ -950,7 +959,7 @@ void mythen::acquisitionTask()
 epicsInt32 mythen::dataCallback(epicsInt32 *pData)
 {
     NDArray *pImage; 
-    int ndims = 1;
+    int ndims = 2;
     size_t dims[2];
     int totalBytes; 
     int arrayCallbacks;
@@ -978,10 +987,10 @@ epicsInt32 mythen::dataCallback(epicsInt32 *pData)
     //    memcpy(pImage->pData,  pData, totalBytes); 
     pImage->dataType = NDUInt32;
     pImage->ndims = ndims; 
-    pImage->dims[0].size = dims[0]; 
+    pImage->dims[0].size = dims[0]*this->nmodules;
     pImage->dims[0].offset = 0; 
     pImage->dims[0].binning = 1; 
-    pImage->dims[1].size = dims[1]; 
+    pImage->dims[1].size = dims[1];
     pImage->dims[1].offset = 0; 
     pImage->dims[1].binning = 1; 
 
