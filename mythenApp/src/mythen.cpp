@@ -118,6 +118,7 @@ public:
     #define LAST_SD_PARAM SDNModules
 
     /* These are the methods we implement from Mythen */
+    virtual void setShutter(epicsInt32 value);
     virtual asynStatus setAcquire(epicsInt32 value);
     virtual asynStatus setFCorrection(epicsInt32 value);
     virtual asynStatus setRCorrection(epicsInt32 value);
@@ -265,6 +266,39 @@ asynStatus mythen::writeReadMeter()
     return status;
 }
 
+void mythen::setShutter(int open)
+{
+    ADShutterMode_t shutterMode;
+    int itemp;
+    double delay;
+    double shutterOpenDelay, shutterCloseDelay;
+
+    getIntegerParam(ADShutterMode, &itemp); shutterMode = (ADShutterMode_t)itemp;
+    getDoubleParam(ADShutterOpenDelay, &shutterOpenDelay);
+    getDoubleParam(ADShutterCloseDelay, &shutterCloseDelay);
+
+    switch (shutterMode) {
+        case ADShutterModeNone:
+            break;
+        case ADShutterModeEPICS:
+            if(! open)
+            {
+                delay = shutterCloseDelay;
+                epicsThreadSleep(delay);
+            }
+            setIntegerParam(ADShutterControlEPICS, open);
+            callParamCallbacks();
+            if(open)
+            {
+                delay = shutterOpenDelay;
+                epicsThreadSleep(delay);
+            }
+            break;
+        case ADShutterModeDetector:
+            break;
+    }
+}
+
 /** Starts and stops the acquisition. **/
 asynStatus mythen::setAcquire(epicsInt32 value)
 {
@@ -282,11 +316,13 @@ asynStatus mythen::setAcquire(epicsInt32 value)
       status = pasynOctetSyncIO->writeRead(pasynUserMeter_, "-stop", strlen(outString_),
                        inString_, sizeof(epicsInt32), M1K_TIMEOUT, &nwrite, &nread, &eomReason);
             setIntegerParam(ADStatus, getStatus());
+            callParamCallbacks();
         //            if (status == asynSuccess || status == asynTimeout) break;
         //        }
       acquiring_ = 0;
     } else {
-        if(!(acquiring_)) {                 
+        if(!(acquiring_)) {
+          setShutter(ADShutterOpen);
           strcpy(outString_,"-start");
           this->sendCommand();
           // Notify the read thread that acquisition has started
@@ -927,6 +963,7 @@ void mythen::acquisitionTask()
 
             eventStatus = getStatus();
             setIntegerParam(ADStatus, eventStatus);
+            callParamCallbacks();
 
             if (eventStatus!=ADStatusError) {
 
@@ -954,6 +991,7 @@ void mythen::acquisitionTask()
                 } while ( (nread_sum < nread_expect) && (nread > 0));
 
                 if(nread_sum == nread_expect) {
+                    printf("Acquired one frame\n");
                     this->lock();
                     dataOK = dataCallback(detArray_);
                     this->unlock();
@@ -962,14 +1000,10 @@ void mythen::acquisitionTask()
                             "%s:%s: error processing readout data\n",
                             driverName, functionName);
                     }
-                    eventStatus = getStatus();
-                    setIntegerParam(ADStatus, eventStatus);
                 }
-                else {
-                    eventStatus = getStatus();
-                    setIntegerParam(ADStatus, eventStatus);
-                  //printf("Data not size expected ADStatus: %d\n",eventStatus);
-                }
+                eventStatus = getStatus();
+                setIntegerParam(ADStatus, eventStatus);
+                callParamCallbacks();
                 if(status != asynSuccess) {
                     asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
                           "%s:%s: error using readout command status=%d, nRead=%d, eomReason=%d\n",
@@ -977,31 +1011,25 @@ void mythen::acquisitionTask()
                 }
               } 
               while (status == asynSuccess && (eventStatus==ADStatusAcquire||eventStatus==ADStatusReadout) && acquiring_);
-             
+              // Make sure the shutter is closed
+              setShutter(ADShutterClosed);
            }
            this->lock();
             
-        }
+        } // end if (!acquire || !acquiring_)
         if (eventStatus!=ADStatusError ) {
           printf("Acquisition finish\n");
           getIntegerParam(ADImageMode, &imageMode);
-          if (imageMode == ADImageSingle || imageMode == ADImageMultiple) {
-            printf("ADAcquire Callback\n");
-            acquiring_ = 0;
-            setIntegerParam(ADAcquire,  0); 
-            callParamCallbacks(); 
-          }
         }
         else {
           //Abort read 
           asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
                 "%s:%s: error timed out waiting for data\n",
                 driverName, functionName);
-          acquiring_ = 0;
-            setAcquire(0);
-          setIntegerParam(ADAcquire,  0); 
-          callParamCallbacks(); 
         }
+          acquiring_ = 0;
+          setIntegerParam(ADAcquire,  0);
+          callParamCallbacks();
     }
 }
 
