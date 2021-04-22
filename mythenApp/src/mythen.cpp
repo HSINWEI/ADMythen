@@ -948,6 +948,7 @@ void mythen::acquisitionTask()
                 "%s:%s: waiting for acquire to start\n", driverName, functionName);
             this->unlock();
             eventStatus = epicsEventWait(this->startEventId_);
+            this->lock();
             // setStringParam(ADStatusMessage, "Acquiring data");
             // setIntegerParam(ADNumImagesCounter, 0);
               // getIntegerParam(ADAcquire, &acquire);
@@ -1013,9 +1014,7 @@ void mythen::acquisitionTask()
               while (status == asynSuccess && (eventStatus==ADStatusAcquire||eventStatus==ADStatusReadout) && acquiring_);
               // Make sure the shutter is closed
               setShutter(ADShutterClosed);
-           }
-           this->lock();
-            
+           } // end if (eventStatus!=ADStatusError)
         } // end if (!acquire || !acquiring_)
         if (eventStatus!=ADStatusError ) {
           printf("Acquisition finish\n");
